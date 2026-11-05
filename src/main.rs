@@ -1,53 +1,56 @@
 use std::io::{BufRead, BufReader};
-use std::fs;
 use std::path::Path;
+use std::fs;
+use std::fs::File;
+use std::thread;
 
 fn main() {
-    if let Err(e) = clear() {
-        eprintln!("ERRO {e}");
-    }
-}
+    let arquivo = Path::new("/sdcard/Android/config_cache.txt");
 
-
-//deleta pastas
-fn clear_cache(pasta: &str) {
-    let p = Path::new(pasta);
-
-    if !p.exists() {
+    if !arquivo.exists() {
+        eprintln!("config: não encontrado");
         return;
     }
+    println!("config: OK");
 
-    match fs::remove_dir_all(p) {
-        Ok(_) => println!("OK"),
-        Err(e) => println!("ERRO em {pasta} e {e}"),  
+    let file = match File::open(arquivo) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("ERRO ao abrir: {e}");
+            return;
+        }
+    };
+    let render = BufReader::new(file);
+
+    let caminhos: Vec<String> = render
+        .lines()
+        .map(|l| l.expect("linha inválida"))
+        .collect();
+
+    let mut threads = vec![];
+
+    for par in caminhos.chunks(2) {
+        let a = par[0].clone();
+        let b = par.get(1).cloned();
+
+        threads.push(thread::spawn(move || {
+            clear(&a);
+            if let Some(b) = b {
+                clear(&b);
+            }
+        }));
     }
+
+    for t in threads {
+        t.join().unwrap();
+    }
+
+    println!("concluído");
 }
 
-//nova versao
-fn clear() -> std::io::Result<()> {
-
-    let arquivo = Path::new("/sdcard/Android/config_cache.txt");
-    
-    if arquivo.exists() {
-        println!("true");
-        let file =  std::fs::File::open(arquivo)?;
-
-        let ler = BufReader::new(file);
-
-        for linha in ler.lines() {
-            let linha = linha?;
-            match fs::remove_dir_all(linha) {
-                Ok(_) => println!("OK"),
-                Err(e) => println!("ERRO {e}"),
-            }
-        }
-        Ok(()) 
-    }
-    else {
-        fs::write(arquivo, "")?;
-        println!("ARQUIVO CRIADO");
-        println!("coloque os caminhos de pastas no");
-        println!("/sdcard/Android/config_cache.txt");
-        Ok(())
+fn clear(caminho: &str) {
+    match fs::remove_dir_all(caminho) {
+        Ok(_) => println!("OK: {caminho}"),
+        Err(e) => println!("ERRO {caminho}: {e}"),
     }
 }
